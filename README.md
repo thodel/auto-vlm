@@ -2,6 +2,8 @@
 
 Für die Veranstaltung "Bilderflut".
 
+**Studierende:** Eine Schritt-für-Schritt-Anleitung findet ihr in [ANLEITUNG.md](ANLEITUNG.md).
+
 Verarbeitet alle Bilder in einem Ordner mit einem Vision-Modell und einem festen Prompt und schreibt die Antworten in eine CSV-Datei.
 
 Es gibt zwei Anbieter:
