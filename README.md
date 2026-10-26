@@ -45,6 +45,7 @@ Standardmodell ist `gemini-3.8-flash`. Mit `--model` wählst du ein anderes.
 | `--prompt-file` | Prompt-Datei (Standard: `prompt.txt`) |
 | `--max-tokens` | Obergrenze für die Antwortlänge (Standard 4096) |
 | `--max-kante` | Bilder mit längerer Kante über diesem Wert (Pixel) werden vor dem Senden verkleinert (Standard 2048, `0` = nie) |
+| `--timeout` | Sekunden pro Anfrage (Standard 300; mit `--zusammen` 120 + 30 pro Bild) |
 | `--workers` | Anzahl paralleler Anfragen (Standard 2) |
 | `--retries` | Versuche pro Bild (Standard 3) |
 | `--recursive` | durchsucht auch Unterordner; `datei` enthält dann den Pfad mit Unterordner, z.B. `band1/a.jpg` |
@@ -58,6 +59,8 @@ Mit `--zusammen` gehen alle Bilder des Ordners in **einer** Anfrage an das Model
 ```bash
 python3 bilder_zu_csv.py ./bilder vergleich.csv --zusammen
 ```
+
+Der Server muss erst alle Bilder einlesen, bevor er zu antworten beginnt; bei 20 Bildern à 2048 px sind das rund 50 000 Eingabe-Tokens, was auch auf einer guten GPU einige Minuten dauern kann. Das Skript meldet die Vorbereitung jedes Bildes, das Absenden der Anfrage und alle 30 s ein Lebenszeichen. Dauert es zu lang: `--max-kante 1024` viertelt die Tokenzahl pro Bild.
 
 Grenzen:
 - Alle Bilder zusammen müssen ins Kontextfenster und ins Anfrage-Limit passen. Bei vielen Bildern `--max-kante 1024` setzen, das verkleinert die Anfrage deutlich.

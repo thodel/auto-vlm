@@ -32,7 +32,7 @@ import os
 import re
 import sys
 import time
-from concurrent.futures import ThreadPoolExecutor, as_completed
+from concurrent.futures import FIRST_COMPLETED, ThreadPoolExecutor, wait
 from io import BytesIO
 from pathlib import Path
 
@@ -114,17 +114,24 @@ def verarbeite_bild(client: OpenAI, modell: str, prompt: str, bilder: list,
     """Ein Auftrag = eine Anfrage. `bilder` ist eine Liste von (Pfad, Name); normalerweise
     ein Bild, mit --zusammen alle Bilder des Ordners auf einmal."""
     name = auftrag_name(bilder)
-    inhalt = []
+    zusammen = len(bilder) > 1
+    inhalt, groesse = [], 0
     for i, (pfad, bild_name) in enumerate(bilder, 1):
         try:
             data_url = bild_als_data_url(pfad, max_kante)
         except Exception as e:  # defekte Datei, unbekanntes Format ...
             return fehler_zeile(name, modell, f"Bild nicht lesbar: {bild_name}: {type(e).__name__}: {e}")
-        if len(bilder) > 1:
+        groesse += len(data_url)
+        if zusammen:
             # Bilder beschriften, damit das Modell sie in der Antwort benennen kann
             inhalt.append({"type": "text", "text": f"Bild {i}: {bild_name}"})
+            print(f"  vorbereitet {i}/{len(bilder)}: {bild_name} ({len(data_url) / 1e6:.1f} MB)", flush=True)
         inhalt.append({"type": "image_url", "image_url": {"url": data_url}})
     inhalt.append({"type": "text", "text": prompt})
+    if zusammen:
+        print(f"Anfrage mit {len(bilder)} Bildern ({groesse / 1e6:.1f} MB) gesendet, warte auf Antwort "
+              f"(Timeout {client.timeout:.0f} s). Der Server muss erst alle Bilder einlesen, das kann dauern.",
+              flush=True)
 
     letzter_fehler = None
     for versuch in range(1, versuche + 1):
@@ -161,7 +168,17 @@ def verarbeite_bild(client: OpenAI, modell: str, prompt: str, bilder: list,
         except openai.BadRequestError as e:
             # Betrifft nur dieses Bild (z.B. zu gross) -> nicht wiederholen
             return fehler_zeile(name, modell, f"{type(e).__name__}: {e}")
-        except Exception as e:  # Netzwerk, Timeout, 5xx, 429 ...
+        except openai.APITimeoutError as e:
+            if zusammen:
+                # Ein zweiter Versuch dauert genauso lang -> sofort melden
+                return fehler_zeile(name, modell, f"Zeitüberschreitung nach {client.timeout:.0f} s. "
+                                    "--timeout erhöhen oder --max-kante verkleinern (z.B. 1024).")
+            letzter_fehler = e
+        except openai.RateLimitError as e:  # 429: Server überlastet oder Kontingent erschöpft
+            letzter_fehler = e
+            if versuch < versuche:
+                time.sleep(15 * versuch)
+        except Exception as e:  # Netzwerk, 5xx ...
             letzter_fehler = e
             if versuch < versuche:
                 time.sleep(2 ** versuch)
@@ -201,6 +218,8 @@ def main():
     ap.add_argument("--max-tokens", type=int, default=4096, help="Obergrenze für die Antwortlänge")
     ap.add_argument("--max-kante", type=int, default=2048,
                     help="Bilder mit längerer Kante (Pixel) werden vor dem Senden verkleinert; 0 = nie")
+    ap.add_argument("--timeout", type=int,
+                    help="Sekunden, die eine Anfrage dauern darf (Standard 300; mit --zusammen 120 + 30 pro Bild)")
     ap.add_argument("--workers", type=int, default=2, help="parallele Anfragen")
     ap.add_argument("--retries", type=int, default=3, help="Versuche pro Bild bei Netzwerk-/Serverfehlern")
     ap.add_argument("--recursive", action="store_true", help="auch Unterordner durchsuchen")
@@ -247,7 +266,10 @@ def main():
     if not offen:
         return
 
-    client = OpenAI(base_url=args.base_url, api_key=args.api_key, timeout=300)
+    timeout = args.timeout or (120 + 30 * len(bilder) if args.zusammen else 300)
+    # max_retries=0: das openai-Paket würde sonst jeden Timeout still 2x wiederholen,
+    # zusätzlich zu unseren eigenen Versuchen -> scheinbar endloses Warten
+    client = OpenAI(base_url=args.base_url, api_key=args.api_key, timeout=timeout, max_retries=0)
     neu = not args.csv.exists()
     # utf-8-sig, damit Excel Umlaute korrekt anzeigt
     with args.csv.open("a", newline="", encoding="utf-8-sig" if neu else "utf-8") as f:
@@ -259,12 +281,22 @@ def main():
                                args.max_tokens, max(1, args.retries), args.max_kante,
                                anbieter["temperature"]) for a in offen]
         try:
-            for i, fut in enumerate(as_completed(futures), 1):
-                zeile = fut.result()
-                writer.writerow(zeile)
-                f.flush()  # sofort schreiben -> bei Abbruch geht nichts verloren
-                kurz = zeile["datei"] if not args.zusammen else f"{len(bilder)} Bilder zusammen"
-                print(f"[{i}/{len(offen)}] {kurz}: {zeile['status']}")
+            fertig, start, letzte_meldung = 0, time.time(), time.time()
+            ausstehend = set(futures)
+            while ausstehend:
+                # Kurz warten statt blockieren: so können wir ein Lebenszeichen ausgeben
+                erledigte, ausstehend = wait(ausstehend, timeout=10, return_when=FIRST_COMPLETED)
+                for fut in erledigte:
+                    fertig += 1
+                    zeile = fut.result()
+                    writer.writerow(zeile)
+                    f.flush()  # sofort schreiben -> bei Abbruch geht nichts verloren
+                    kurz = zeile["datei"] if not args.zusammen else f"{len(bilder)} Bilder zusammen"
+                    print(f"[{fertig}/{len(offen)}] {kurz}: {zeile['status']}", flush=True)
+                    letzte_meldung = time.time()
+                if ausstehend and time.time() - letzte_meldung >= 30:
+                    print(f"  ... läuft seit {time.time() - start:.0f} s, {fertig}/{len(offen)} fertig", flush=True)
+                    letzte_meldung = time.time()
         except Abbruch as e:
             pool.shutdown(wait=False, cancel_futures=True)
             f.flush()
