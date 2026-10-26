@@ -44,9 +44,11 @@ Standardmodell ist `gemini-2.5-flash`. Mit `--model` wählst du ein anderes.
 | `--base-url`, `--api-key`, `--model` | überschreiben die Voreinstellungen des Anbieters |
 | `--prompt-file` | Prompt-Datei (Standard: `prompt.txt`) |
 | `--max-tokens` | Obergrenze für die Antwortlänge (Standard 4096) |
+| `--max-kante` | Bilder mit längerer Kante über diesem Wert (Pixel) werden vor dem Senden verkleinert (Standard 2048, `0` = nie) |
 | `--workers` | Anzahl paralleler Anfragen (Standard 2) |
 | `--retries` | Versuche pro Bild (Standard 3) |
 | `--recursive` | durchsucht auch Unterordner; `datei` enthält dann den Pfad mit Unterordner, z.B. `band1/a.jpg` |
+| `--semikolon` | Semikolon statt Komma als Trennzeichen, damit Excel mit deutschen/schweizer Einstellungen die CSV direkt öffnet |
 
 ## Ausgabe
 
@@ -55,8 +57,11 @@ Die CSV hat die Spalten `datei, status, antwort, modell, dauer_s, prompt_tokens,
 Mögliche Werte in `status`:
 - `ok`: Antwort vollständig
 - `abgeschnitten`: Token-Limit erreicht, Antwort unvollständig. `--max-tokens` erhöhen.
-- `fehler`: Anfrage auch nach allen Versuchen gescheitert. Die Fehlermeldung steht in `antwort`.
+- `leer`: Das Modell hat nichts geantwortet (bei „Thinking“-Modellen z.B., wenn das Limit schon beim Nachdenken aufgebraucht war). `--max-tokens` erhöhen oder Prompt anpassen.
+- `fehler`: Anfrage auch nach allen Versuchen gescheitert, oder die Bilddatei ist nicht lesbar. Die Fehlermeldung steht in `antwort`.
 
-Abbrüche sind unproblematisch: Jede Zeile wird sofort gespeichert. Bei einem neuen Start werden Bilder mit Status `ok` übersprungen.
+Abbrüche (auch mit Ctrl+C) sind unproblematisch: Jede Zeile wird sofort gespeichert. Bei einem neuen Start werden Bilder mit Status `ok` übersprungen; alle anderen werden erneut verarbeitet und bekommen eine neue Zeile, die alte bleibt stehen.
 
-Unterstützte Formate sind jpg, png, webp, tif, bmp und gif. TIFF wird vor dem Senden in PNG umgewandelt.
+Wird der API-Key abgelehnt oder das Modell nicht gefunden, bricht das Skript sofort mit einer Meldung ab, statt für jedes Bild eine Fehlerzeile zu schreiben.
+
+Unterstützte Formate sind jpg, png, webp, tif, bmp und gif. JPEG, PNG und WebP werden unverändert gesendet, solange die längere Kante höchstens `--max-kante` Pixel misst. Grössere Bilder werden verkleinert, TIFF/BMP/GIF nach JPEG gewandelt (Gemini nimmt diese Formate nicht an, und sehr grosse Scans überschreiten das Anfrage-Limit).

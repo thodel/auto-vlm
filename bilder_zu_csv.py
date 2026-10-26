@@ -10,7 +10,7 @@ Zwei Anbieter stehen zur Wahl (--provider):
 Beide bieten eine OpenAI-kompatible API, daher nutzen wir für beide das
 offizielle `openai`-Paket:
 
-    pip install openai
+    pip install -r requirements.txt
 
 Der Prompt wird aus prompt.txt (neben dem Skript) gelesen.
 
@@ -28,15 +28,20 @@ stehen, werden beim nächsten Lauf übersprungen.
 import argparse
 import base64
 import csv
-import mimetypes
 import os
 import re
 import sys
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from io import BytesIO
 from pathlib import Path
 
-from openai import OpenAI
+try:
+    import openai
+    from openai import OpenAI
+    from PIL import Image, ImageOps
+except ImportError as e:
+    sys.exit(f"Paket fehlt ({e.name}). Bitte zuerst ausführen:  pip install -r requirements.txt")
 
 # Der Prompt steht in prompt.txt neben diesem Skript (oder per --prompt-file).
 STANDARD_PROMPT_DATEI = Path(__file__).resolve().parent / "prompt.txt"
@@ -56,22 +61,34 @@ ANBIETER = {
 }
 
 BILD_ENDUNGEN = {".jpg", ".jpeg", ".png", ".webp", ".tif", ".tiff", ".bmp", ".gif"}
+# Diese Formate verstehen beide Anbieter direkt; alles andere wird nach JPEG gewandelt.
+DIREKT_SENDEN = {".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".png": "image/png", ".webp": "image/webp"}
 CSV_SPALTEN = ["datei", "status", "antwort", "modell", "dauer_s", "prompt_tokens", "completion_tokens"]
 
 
-def bild_als_data_url(pfad: Path) -> str:
-    """Bild base64-kodiert als data:-URL, wie es die OpenAI-Vision-API erwartet."""
-    mime = mimetypes.guess_type(pfad.name)[0] or "image/jpeg"
-    if pfad.suffix.lower() in {".tif", ".tiff"}:
-        # TIFF wird von vielen Servern nicht akzeptiert -> nach PNG konvertieren
-        from io import BytesIO
-        from PIL import Image  # pip install pillow
+class Abbruch(Exception):
+    """Fehler, der alle Bilder betrifft (falscher Key, unbekanntes Modell): Lauf beenden."""
 
-        buf = BytesIO()
-        Image.open(pfad).convert("RGB").save(buf, format="PNG")
-        daten, mime = buf.getvalue(), "image/png"
-    else:
-        daten = pfad.read_bytes()
+
+def bild_als_data_url(pfad: Path, max_kante: int) -> str:
+    """Bild base64-kodiert als data:-URL, wie es die OpenAI-Vision-API erwartet.
+
+    JPEG/PNG/WebP bis max_kante Pixel gehen unverändert raus. Grössere Bilder
+    werden verkleinert, andere Formate (TIFF, BMP, GIF) nach JPEG gewandelt,
+    denn Gemini nimmt sie nicht an und riesige Scans sprengen das Anfrage-Limit.
+    """
+    endung = pfad.suffix.lower()
+    with Image.open(pfad) as im:
+        zu_gross = max_kante and max(im.size) > max_kante
+        if endung in DIREKT_SENDEN and not zu_gross:
+            daten, mime = pfad.read_bytes(), DIREKT_SENDEN[endung]
+        else:
+            im = ImageOps.exif_transpose(im)  # gedrehte Handyfotos richtig herum
+            if zu_gross:
+                im.thumbnail((max_kante, max_kante))  # verkleinert, behält das Seitenverhältnis
+            buf = BytesIO()
+            im.convert("RGB").save(buf, format="JPEG", quality=92)
+            daten, mime = buf.getvalue(), "image/jpeg"
     return f"data:{mime};base64,{base64.b64encode(daten).decode('ascii')}"
 
 
@@ -80,9 +97,18 @@ def entferne_thinking(text: str) -> str:
     return re.sub(r"<think>.*?</think>", "", text, flags=re.DOTALL).strip()
 
 
+def fehler_zeile(name: str, modell: str, meldung: str) -> dict:
+    return {"datei": name, "status": "fehler", "antwort": meldung, "modell": modell,
+            "dauer_s": "", "prompt_tokens": "", "completion_tokens": ""}
+
+
 def verarbeite_bild(client: OpenAI, modell: str, prompt: str, pfad: Path, name: str,
-                    max_tokens: int, versuche: int) -> dict:
-    data_url = bild_als_data_url(pfad)
+                    max_tokens: int, versuche: int, max_kante: int) -> dict:
+    try:
+        data_url = bild_als_data_url(pfad, max_kante)
+    except Exception as e:  # defekte Datei, unbekanntes Format ...
+        return fehler_zeile(name, modell, f"Bild nicht lesbar: {type(e).__name__}: {e}")
+
     letzter_fehler = None
     for versuch in range(1, versuche + 1):
         start = time.time()
@@ -102,30 +128,53 @@ def verarbeite_bild(client: OpenAI, modell: str, prompt: str, pfad: Path, name: 
             wahl = resp.choices[0]
             antwort = entferne_thinking(wahl.message.content or "")
             usage = resp.usage
+            if wahl.finish_reason == "length":
+                status = "abgeschnitten"  # Token-Limit erreicht -> Antwort unvollständig
+            elif not antwort:
+                status = "leer"
+            else:
+                status = "ok"
             return {
                 "datei": name,
-                # "length" = Token-Limit erreicht -> Antwort ist abgeschnitten
-                "status": "ok" if wahl.finish_reason != "length" else "abgeschnitten",
+                "status": status,
                 "antwort": antwort,
-                "modell": resp.model,
+                "modell": resp.model or modell,
                 "dauer_s": round(time.time() - start, 1),
                 "prompt_tokens": usage.prompt_tokens if usage else "",
                 "completion_tokens": usage.completion_tokens if usage else "",
             }
-        except Exception as e:  # Netzwerk, Timeout, 5xx ...
+        except (openai.AuthenticationError, openai.PermissionDeniedError) as e:
+            raise Abbruch(f"API-Key wurde abgelehnt. Key und Anbieter prüfen.\n{e}") from e
+        except openai.NotFoundError as e:
+            raise Abbruch(f"Modell '{modell}' oder Adresse nicht gefunden. --model und --base-url prüfen.\n{e}") from e
+        except openai.BadRequestError as e:
+            # Betrifft nur dieses Bild (z.B. zu gross) -> nicht wiederholen
+            return fehler_zeile(name, modell, f"{type(e).__name__}: {e}")
+        except Exception as e:  # Netzwerk, Timeout, 5xx, 429 ...
             letzter_fehler = e
             if versuch < versuche:
                 time.sleep(2 ** versuch)
-    return {"datei": name, "status": "fehler", "antwort": f"{type(letzter_fehler).__name__}: {letzter_fehler}",
-            "modell": modell, "dauer_s": "", "prompt_tokens": "", "completion_tokens": ""}
+    return fehler_zeile(name, modell, f"{type(letzter_fehler).__name__}: {letzter_fehler}")
 
 
-def bereits_erledigt(csv_pfad: Path) -> set:
+def csv_trennzeichen(csv_pfad: Path, gewuenscht: str) -> str:
+    """Bei einer bestehenden CSV deren Trennzeichen übernehmen, damit das Fortsetzen klappt."""
+    if not csv_pfad.exists():
+        return gewuenscht
+    with csv_pfad.open(encoding="utf-8-sig") as f:
+        kopf = f.readline()
+    vorhanden = ";" if kopf.count(";") > kopf.count(",") else ","
+    if vorhanden != gewuenscht:
+        print(f"Hinweis: {csv_pfad} verwendet bereits '{vorhanden}' als Trennzeichen, das wird beibehalten.")
+    return vorhanden
+
+
+def bereits_erledigt(csv_pfad: Path, trennzeichen: str) -> set:
     """Dateinamen, die schon erfolgreich in der CSV stehen."""
     if not csv_pfad.exists():
         return set()
     with csv_pfad.open(newline="", encoding="utf-8-sig") as f:
-        return {z["datei"] for z in csv.DictReader(f) if z.get("status") == "ok"}
+        return {z["datei"] for z in csv.DictReader(f, delimiter=trennzeichen) if z.get("status") == "ok"}
 
 
 def main():
@@ -138,10 +187,14 @@ def main():
     ap.add_argument("--model", help="Modellname (Standard: qwen3.8-27b bzw. gemini-2.5-flash)")
     ap.add_argument("--prompt-file", type=Path, default=STANDARD_PROMPT_DATEI,
                     help="Textdatei mit dem Prompt (Standard: prompt.txt neben dem Skript)")
-    ap.add_argument("--max-tokens", type=int, default=4096)
+    ap.add_argument("--max-tokens", type=int, default=4096, help="Obergrenze für die Antwortlänge")
+    ap.add_argument("--max-kante", type=int, default=2048,
+                    help="Bilder mit längerer Kante (Pixel) werden vor dem Senden verkleinert; 0 = nie")
     ap.add_argument("--workers", type=int, default=2, help="parallele Anfragen")
-    ap.add_argument("--retries", type=int, default=3)
+    ap.add_argument("--retries", type=int, default=3, help="Versuche pro Bild bei Netzwerk-/Serverfehlern")
     ap.add_argument("--recursive", action="store_true", help="auch Unterordner durchsuchen")
+    ap.add_argument("--semikolon", action="store_true",
+                    help="Semikolon statt Komma als Trennzeichen (für Excel mit deutschen Einstellungen)")
     args = ap.parse_args()
 
     anbieter = ANBIETER[args.provider]
@@ -150,9 +203,12 @@ def main():
     args.model = args.model or anbieter["model"]
     if not args.api_key:
         sys.exit(f"Kein API-Key: --api-key setzen oder {anbieter['key_env']} exportieren.")
+    if not args.ordner.is_dir():
+        sys.exit(f"Bildordner nicht gefunden: {args.ordner}")
     if not args.prompt_file.is_file():
         sys.exit(f"Prompt-Datei nicht gefunden: {args.prompt_file}")
-    prompt = args.prompt_file.read_text(encoding="utf-8").strip()
+    # utf-8-sig: Windows-Editoren schreiben oft eine BOM an den Anfang, die soll nicht in den Prompt
+    prompt = args.prompt_file.read_text(encoding="utf-8-sig").strip()
     if not prompt:
         sys.exit(f"Prompt-Datei ist leer: {args.prompt_file}")
 
@@ -160,7 +216,8 @@ def main():
     bilder = sorted(p for p in args.ordner.glob(muster) if p.is_file() and p.suffix.lower() in BILD_ENDUNGEN)
     # Pfad relativ zum Bildordner, z.B. "a.jpg" oder mit --recursive "unterordner/a.jpg"
     namen = {p: p.relative_to(args.ordner).as_posix() for p in bilder}
-    erledigt = bereits_erledigt(args.csv)
+    trennzeichen = csv_trennzeichen(args.csv, ";" if args.semikolon else ",")
+    erledigt = bereits_erledigt(args.csv, trennzeichen)
     offen = [p for p in bilder if namen[p] not in erledigt]
     print(f"{len(bilder)} Bilder gefunden, {len(erledigt)} bereits erledigt, {len(offen)} zu verarbeiten.")
     if not offen:
@@ -170,17 +227,30 @@ def main():
     neu = not args.csv.exists()
     # utf-8-sig, damit Excel Umlaute korrekt anzeigt
     with args.csv.open("a", newline="", encoding="utf-8-sig" if neu else "utf-8") as f:
-        writer = csv.DictWriter(f, fieldnames=CSV_SPALTEN, quoting=csv.QUOTE_ALL)
+        writer = csv.DictWriter(f, fieldnames=CSV_SPALTEN, delimiter=trennzeichen, quoting=csv.QUOTE_ALL)
         if neu:
             writer.writeheader()
-        with ThreadPoolExecutor(max_workers=args.workers) as pool:
-            futures = {pool.submit(verarbeite_bild, client, args.model, prompt, p, namen[p],
-                                   args.max_tokens, args.retries): p for p in offen}
+        pool = ThreadPoolExecutor(max_workers=args.workers)
+        futures = [pool.submit(verarbeite_bild, client, args.model, prompt, p, namen[p],
+                               args.max_tokens, max(1, args.retries), args.max_kante) for p in offen]
+        try:
             for i, fut in enumerate(as_completed(futures), 1):
                 zeile = fut.result()
                 writer.writerow(zeile)
                 f.flush()  # sofort schreiben -> bei Abbruch geht nichts verloren
                 print(f"[{i}/{len(offen)}] {zeile['datei']}: {zeile['status']}")
+        except Abbruch as e:
+            pool.shutdown(wait=False, cancel_futures=True)
+            f.flush()
+            print(f"\nAbbruch: {e}", file=sys.stderr)
+            os._exit(1)  # nicht auf laufende Anfragen warten, die scheitern ohnehin gleich
+        except KeyboardInterrupt:
+            pool.shutdown(wait=False, cancel_futures=True)
+            f.flush()
+            print("\nAbgebrochen. Beim nächsten Start mit demselben Befehl geht es bei den fehlenden Bildern weiter.")
+            os._exit(130)  # sonst würde Python noch auf die laufenden Anfragen warten
+        pool.shutdown()
+    print(f"Fertig. Ergebnisse in {args.csv}")
 
 
 if __name__ == "__main__":

@@ -82,7 +82,15 @@ Das Skript zeigt für jedes Bild an, ob es geklappt hat. Wird es unterbrochen, s
 Die Spalte `status` zeigt, ob alles geklappt hat:
 - `ok`: Die Antwort ist vollständig.
 - `abgeschnitten`: Die Antwort war zu lang und ist unvollständig. Starte das Skript erneut mit `--max-tokens 8000`.
-- `fehler`: Die Anfrage ist gescheitert. Die Fehlermeldung steht in `antwort`.
+- `leer`: Das Modell hat nichts geantwortet. Starte erneut mit `--max-tokens 8000` oder formuliere den Prompt anders.
+- `fehler`: Die Anfrage ist gescheitert oder die Bilddatei ist kaputt. Die Fehlermeldung steht in `antwort`.
+
+Beim erneuten Start werden Bilder mit `ok` übersprungen, alle anderen bekommen eine neue Zeile (die alte bleibt stehen). Mit **Ctrl+C** kannst du das Skript jederzeit abbrechen; was schon fertig ist, bleibt gespeichert.
+
+**Alles in einer Spalte?** Excel mit deutschen oder schweizer Einstellungen erwartet ein Semikolon als Trennzeichen. Starte das Skript dann mit dem Zusatz `--semikolon`, z.B.:
+```
+python bilder_zu_csv.py bilder ergebnisse.csv --semikolon
+```
 
 **Wichtig:** KI-Modelle machen Fehler und erfinden manchmal Dinge. Prüfe die Ergebnisse stichprobenartig am Bild selbst.
 
@@ -91,7 +99,12 @@ Die Spalte `status` zeigt, ob alles geklappt hat:
 | Meldung | Lösung |
 |---|---|
 | `python` oder `pip` wird nicht gefunden | Python ist nicht installiert oder nicht im PATH. Neu installieren und „Add Python to PATH“ anhaken. |
+| `Paket fehlt …` | Schritt 4 der Vorbereitung (`pip install -r requirements.txt`) ausführen. |
 | `Kein API-Key …` | Schritt 2 im selben Terminal-Fenster wiederholen. |
+| `Abbruch: API-Key wurde abgelehnt` | Key falsch abgetippt oder beim falschen Anbieter verwendet (GPUStack-Key braucht kein `--provider gemini` und umgekehrt). |
+| `Abbruch: Modell … nicht gefunden` | Modellname oder Server-Adresse stimmt nicht. Bei der Kursleitung nachfragen. |
+| `Bildordner nicht gefunden` | Pfad prüfen, siehe „Anderen Ordner verwenden“. |
 | `0 Bilder gefunden` | Ordnername prüfen. Unterstützt werden jpg, png, webp, tif, bmp und gif. |
 | Viele `fehler` mit „429“ oder „rate limit“ | Zu viele Anfragen auf einmal. Mit `--workers 1` starten. |
+| Alles in einer Spalte in Excel | Skript mit `--semikolon` starten oder über **Daten → Aus Text/CSV** importieren. |
 | Umlaute in Excel kaputt | In Excel über **Daten → Aus Text/CSV** importieren und UTF-8 wählen. |
