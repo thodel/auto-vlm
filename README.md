@@ -34,7 +34,7 @@ Einen anderen Server oder ein anderes Modell wählst du mit `--base-url` und `--
 export GEMINI_API_KEY="..."
 python3 bilder_zu_csv.py ./bilder ergebnisse.csv --provider gemini
 ```
-Standardmodell ist `gemini-2.5-flash`. Mit `--model` wählst du ein anderes.
+Standardmodell ist `gemini-3.8-flash`. Mit `--model` wählst du ein anderes.
 
 ## Optionen
 

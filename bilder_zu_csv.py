@@ -52,11 +52,13 @@ ANBIETER = {
         "base_url": os.environ.get("GPUSTACK_BASE_URL", "http://gpustack.unibe.ch/v1"),
         "key_env": "GPUSTACK_API_KEY",
         "model": "qwen3.8-27b",
+        "temperature": 0,  # deterministisch
     },
     "gemini": {
         "base_url": "https://generativelanguage.googleapis.com/v1beta/openai/",
         "key_env": "GEMINI_API_KEY",
-        "model": "gemini-2.5-flash",
+        "model": "gemini-3.8-flash",
+        "temperature": None,  # Google: bei Gemini 3.x temperature nicht setzen
     },
 }
 
@@ -103,7 +105,7 @@ def fehler_zeile(name: str, modell: str, meldung: str) -> dict:
 
 
 def verarbeite_bild(client: OpenAI, modell: str, prompt: str, pfad: Path, name: str,
-                    max_tokens: int, versuche: int, max_kante: int) -> dict:
+                    max_tokens: int, versuche: int, max_kante: int, temperature) -> dict:
     try:
         data_url = bild_als_data_url(pfad, max_kante)
     except Exception as e:  # defekte Datei, unbekanntes Format ...
@@ -123,7 +125,7 @@ def verarbeite_bild(client: OpenAI, modell: str, prompt: str, pfad: Path, name: 
                     ],
                 }],
                 max_tokens=max_tokens,
-                temperature=0,
+                **({"temperature": temperature} if temperature is not None else {}),
             )
             wahl = resp.choices[0]
             antwort = entferne_thinking(wahl.message.content or "")
@@ -184,7 +186,7 @@ def main():
     ap.add_argument("--provider", choices=ANBIETER, default="gpustack", help="gpustack (Standard) oder gemini")
     ap.add_argument("--base-url", help="API-Adresse; GPUStack z.B. http://server/v1 (ältere Versionen: /v1-openai)")
     ap.add_argument("--api-key", help="API-Key (Standard: GPUSTACK_API_KEY bzw. GEMINI_API_KEY)")
-    ap.add_argument("--model", help="Modellname (Standard: qwen3.8-27b bzw. gemini-2.5-flash)")
+    ap.add_argument("--model", help="Modellname (Standard: qwen3.8-27b bzw. gemini-3.8-flash)")
     ap.add_argument("--prompt-file", type=Path, default=STANDARD_PROMPT_DATEI,
                     help="Textdatei mit dem Prompt (Standard: prompt.txt neben dem Skript)")
     ap.add_argument("--max-tokens", type=int, default=4096, help="Obergrenze für die Antwortlänge")
@@ -232,7 +234,8 @@ def main():
             writer.writeheader()
         pool = ThreadPoolExecutor(max_workers=args.workers)
         futures = [pool.submit(verarbeite_bild, client, args.model, prompt, p, namen[p],
-                               args.max_tokens, max(1, args.retries), args.max_kante) for p in offen]
+                               args.max_tokens, max(1, args.retries), args.max_kante,
+                               anbieter["temperature"]) for p in offen]
         try:
             for i, fut in enumerate(as_completed(futures), 1):
                 zeile = fut.result()
