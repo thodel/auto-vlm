@@ -20,7 +20,7 @@ Mit diesem Werkzeug lässt du ein KI-Modell alle Bilder in einem Ordner „ansch
 
 Du brauchst einen Schlüssel für den Dienst, der die Bilder auswertet:
 
-- **GPUStack (Qwen3-VL):** Den Key und die Server-Adresse bekommst du von der Kursleitung.
+- **GPUStack der Uni Bern:** Den Key bekommst du von der Kursleitung.
 - **Gemini:** Einen kostenlosen Key erstellst du unter https://aistudio.google.com/apikey.
 
 Den Key gibst du im Terminal so an. Er gilt nur, solange dieses Terminal-Fenster offen ist.
@@ -51,9 +51,9 @@ Leg deine Bilder in einen Ordner, z.B. `bilder` im Projektordner. Dann im Termin
 python bilder_zu_csv.py bilder ergebnisse.csv --provider gemini
 ```
 
-**Mit GPUStack** (Adresse und Modellname von der Kursleitung)
+**Mit GPUStack der Uni Bern** (Server `http://gpustack.unibe.ch/v1` und Modell `qwen3.8-27b` sind voreingestellt)
 ```
-python bilder_zu_csv.py bilder ergebnisse.csv --base-url http://SERVER/v1 --model MODELLNAME
+python bilder_zu_csv.py bilder ergebnisse.csv
 ```
 
 Auf dem Mac `python3` statt `python` verwenden.

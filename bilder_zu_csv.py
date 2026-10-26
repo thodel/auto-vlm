@@ -4,7 +4,7 @@ Alle Bilder eines Ordners mit einem Vision-Modell und einem festen Prompt
 verarbeiten und die Antworten in eine CSV-Datei schreiben.
 
 Zwei Anbieter stehen zur Wahl (--provider):
-  gpustack  Qwen3-VL o.ä. auf einem eigenen GPUStack-Server
+  gpustack  GPUStack der Uni Bern (Standard: qwen3.8-27b)
   gemini    Google Gemini API
 
 Beide bieten eine OpenAI-kompatible API, daher nutzen wir für beide das
@@ -16,9 +16,7 @@ Der Prompt wird aus prompt.txt (neben dem Skript) gelesen.
 
 Beispiele:
     export GPUSTACK_API_KEY="gpustack_..."
-    python3 bilder_zu_csv.py ./scans ergebnisse.csv \
-        --base-url http://gpustack.example.org/v1 \
-        --model qwen3-vl-8b-instruct
+    python3 bilder_zu_csv.py ./scans ergebnisse.csv   # GPUStack der Uni Bern
 
     export GEMINI_API_KEY="..."
     python3 bilder_zu_csv.py ./scans ergebnisse.csv --provider gemini
@@ -46,9 +44,9 @@ STANDARD_PROMPT_DATEI = Path(__file__).resolve().parent / "prompt.txt"
 # Voreinstellungen je Anbieter; alles lässt sich per Kommandozeile überschreiben.
 ANBIETER = {
     "gpustack": {
-        "base_url": os.environ.get("GPUSTACK_BASE_URL", "http://localhost/v1"),
+        "base_url": os.environ.get("GPUSTACK_BASE_URL", "http://gpustack.unibe.ch/v1"),
         "key_env": "GPUSTACK_API_KEY",
-        "model": "qwen3-vl",
+        "model": "qwen3.8-27b",
     },
     "gemini": {
         "base_url": "https://generativelanguage.googleapis.com/v1beta/openai/",
@@ -78,7 +76,7 @@ def bild_als_data_url(pfad: Path) -> str:
 
 
 def entferne_thinking(text: str) -> str:
-    """Qwen3-VL-"Thinking"-Varianten liefern <think>...</think> mit; das wegschneiden."""
+    """"Thinking"-Modelle (z.B. Qwen3) liefern <think>...</think> mit; das wegschneiden."""
     return re.sub(r"<think>.*?</think>", "", text, flags=re.DOTALL).strip()
 
 
@@ -137,7 +135,7 @@ def main():
     ap.add_argument("--provider", choices=ANBIETER, default="gpustack", help="gpustack (Standard) oder gemini")
     ap.add_argument("--base-url", help="API-Adresse; GPUStack z.B. http://server/v1 (ältere Versionen: /v1-openai)")
     ap.add_argument("--api-key", help="API-Key (Standard: GPUSTACK_API_KEY bzw. GEMINI_API_KEY)")
-    ap.add_argument("--model", help="Modellname (Standard: qwen3-vl bzw. gemini-2.5-flash)")
+    ap.add_argument("--model", help="Modellname (Standard: qwen3.8-27b bzw. gemini-2.5-flash)")
     ap.add_argument("--prompt-file", type=Path, default=STANDARD_PROMPT_DATEI,
                     help="Textdatei mit dem Prompt (Standard: prompt.txt neben dem Skript)")
     ap.add_argument("--max-tokens", type=int, default=4096)

@@ -7,7 +7,7 @@ Für die Veranstaltung "Bilderflut".
 Verarbeitet alle Bilder in einem Ordner mit einem Vision-Modell und einem festen Prompt und schreibt die Antworten in eine CSV-Datei.
 
 Es gibt zwei Anbieter:
-- **GPUStack**, z.B. mit Qwen3-VL (Standard)
+- **GPUStack** der Uni Bern mit `qwen3.8-27b` (Standard)
 - **Google Gemini API**
 
 ## Installation
@@ -22,14 +22,12 @@ Der Prompt steht in `prompt.txt` neben dem Skript. Diese Datei bearbeiten oder m
 
 ## Verwendung
 
-**GPUStack / Qwen3-VL**
+**GPUStack der Uni Bern** (Standard: `http://gpustack.unibe.ch/v1`, Modell `qwen3.8-27b`)
 ```bash
 export GPUSTACK_API_KEY="gpustack_..."
-python3 bilder_zu_csv.py ./bilder ergebnisse.csv \
-    --base-url http://<gpustack-server>/v1 \
-    --model <modellname-in-gpustack>
+python3 bilder_zu_csv.py ./bilder ergebnisse.csv
 ```
-Bei älteren GPUStack-Versionen lautet die Adresse `/v1-openai` statt `/v1`.
+Einen anderen Server oder ein anderes Modell wählst du mit `--base-url` und `--model`.
 
 **Gemini**
 ```bash
