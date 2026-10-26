@@ -58,6 +58,21 @@ python bilder_zu_csv.py bilder ergebnisse.csv
 
 Auf dem Mac `python3` statt `python` verwenden.
 
+### Anderen Ordner verwenden
+
+Der erste Wert nach `bilder_zu_csv.py` ist der Bildordner, der zweite die CSV-Datei. Pfade gelten vom Ordner aus, in dem das Terminal gerade steht (normalerweise der Projektordner).
+
+| Wo liegen die Bilder? | Befehl |
+|---|---|
+| Ordner `vlm-test` im Projektordner | `python bilder_zu_csv.py vlm-test ergebnisse.csv` |
+| Unterordner, z.B. `bilder/vlm-test` | `python bilder_zu_csv.py bilder/vlm-test ergebnisse.csv` |
+| Woanders, z.B. auf dem Desktop | `python bilder_zu_csv.py "C:\Users\anna\Desktop\vlm test" ergebnisse.csv` |
+| CSV im selben Ordner speichern | `python bilder_zu_csv.py vlm-test vlm-test/ergebnisse.csv` |
+
+- Enthält ein Pfad Leerzeichen, setze ihn in Anführungszeichen.
+- Du kannst den Ordner auch ins Terminal-Fenster ziehen, dann wird der Pfad automatisch eingefügt.
+- **Unterordner mitnehmen:** Normalerweise werden nur die Bilder direkt im Ordner verarbeitet. Mit `--recursive` kommen auch die Bilder in Unterordnern dazu. In der Spalte `datei` steht dann der Pfad mit Unterordner, z.B. `band1/seite_001.jpg`.
+
 Das Skript zeigt für jedes Bild an, ob es geklappt hat. Wird es unterbrochen, starte es einfach mit demselben Befehl neu. Bereits fertige Bilder werden übersprungen.
 
 ## 5. Ergebnis ansehen

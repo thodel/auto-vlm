@@ -80,7 +80,7 @@ def entferne_thinking(text: str) -> str:
     return re.sub(r"<think>.*?</think>", "", text, flags=re.DOTALL).strip()
 
 
-def verarbeite_bild(client: OpenAI, modell: str, prompt: str, pfad: Path,
+def verarbeite_bild(client: OpenAI, modell: str, prompt: str, pfad: Path, name: str,
                     max_tokens: int, versuche: int) -> dict:
     data_url = bild_als_data_url(pfad)
     letzter_fehler = None
@@ -103,7 +103,7 @@ def verarbeite_bild(client: OpenAI, modell: str, prompt: str, pfad: Path,
             antwort = entferne_thinking(wahl.message.content or "")
             usage = resp.usage
             return {
-                "datei": pfad.name,
+                "datei": name,
                 # "length" = Token-Limit erreicht -> Antwort ist abgeschnitten
                 "status": "ok" if wahl.finish_reason != "length" else "abgeschnitten",
                 "antwort": antwort,
@@ -116,7 +116,7 @@ def verarbeite_bild(client: OpenAI, modell: str, prompt: str, pfad: Path,
             letzter_fehler = e
             if versuch < versuche:
                 time.sleep(2 ** versuch)
-    return {"datei": pfad.name, "status": "fehler", "antwort": f"{type(letzter_fehler).__name__}: {letzter_fehler}",
+    return {"datei": name, "status": "fehler", "antwort": f"{type(letzter_fehler).__name__}: {letzter_fehler}",
             "modell": modell, "dauer_s": "", "prompt_tokens": "", "completion_tokens": ""}
 
 
@@ -158,8 +158,10 @@ def main():
 
     muster = "**/*" if args.recursive else "*"
     bilder = sorted(p for p in args.ordner.glob(muster) if p.is_file() and p.suffix.lower() in BILD_ENDUNGEN)
+    # Pfad relativ zum Bildordner, z.B. "a.jpg" oder mit --recursive "unterordner/a.jpg"
+    namen = {p: p.relative_to(args.ordner).as_posix() for p in bilder}
     erledigt = bereits_erledigt(args.csv)
-    offen = [p for p in bilder if p.name not in erledigt]
+    offen = [p for p in bilder if namen[p] not in erledigt]
     print(f"{len(bilder)} Bilder gefunden, {len(erledigt)} bereits erledigt, {len(offen)} zu verarbeiten.")
     if not offen:
         return
@@ -172,7 +174,7 @@ def main():
         if neu:
             writer.writeheader()
         with ThreadPoolExecutor(max_workers=args.workers) as pool:
-            futures = {pool.submit(verarbeite_bild, client, args.model, prompt, p,
+            futures = {pool.submit(verarbeite_bild, client, args.model, prompt, p, namen[p],
                                    args.max_tokens, args.retries): p for p in offen}
             for i, fut in enumerate(as_completed(futures), 1):
                 zeile = fut.result()

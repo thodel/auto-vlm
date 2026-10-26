@@ -46,7 +46,7 @@ Standardmodell ist `gemini-2.5-flash`. Mit `--model` wählst du ein anderes.
 | `--max-tokens` | Obergrenze für die Antwortlänge (Standard 4096) |
 | `--workers` | Anzahl paralleler Anfragen (Standard 2) |
 | `--retries` | Versuche pro Bild (Standard 3) |
-| `--recursive` | durchsucht auch Unterordner |
+| `--recursive` | durchsucht auch Unterordner; `datei` enthält dann den Pfad mit Unterordner, z.B. `band1/a.jpg` |
 
 ## Ausgabe
 
