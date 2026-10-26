@@ -48,7 +48,21 @@ Standardmodell ist `gemini-3.8-flash`. Mit `--model` wählst du ein anderes.
 | `--workers` | Anzahl paralleler Anfragen (Standard 2) |
 | `--retries` | Versuche pro Bild (Standard 3) |
 | `--recursive` | durchsucht auch Unterordner; `datei` enthält dann den Pfad mit Unterordner, z.B. `band1/a.jpg` |
+| `--zusammen` | alle Bilder in einer einzigen Anfrage schicken, eine CSV-Zeile (siehe unten) |
 | `--semikolon` | Semikolon statt Komma als Trennzeichen, damit Excel mit deutschen/schweizer Einstellungen die CSV direkt öffnet |
+
+## Bilder vergleichen (`--zusammen`)
+
+Mit `--zusammen` gehen alle Bilder des Ordners in **einer** Anfrage an das Modell. Es sieht sie gleichzeitig und kann sie vergleichen, sortieren oder Gemeinsamkeiten benennen. Vor jedem Bild steht `Bild 1: name.jpg`, `Bild 2: …`, damit das Modell die Bilder in der Antwort benennen kann. Die CSV bekommt eine Zeile; in `datei` stehen alle Dateinamen mit ` | ` getrennt.
+
+```bash
+python3 bilder_zu_csv.py ./bilder vergleich.csv --zusammen
+```
+
+Grenzen:
+- Alle Bilder zusammen müssen ins Kontextfenster und ins Anfrage-Limit passen. Bei vielen Bildern `--max-kante 1024` setzen, das verkleinert die Anfrage deutlich.
+- Manche GPUStack-Modelle erlauben nur eine begrenzte Zahl Bilder pro Anfrage (Server-Einstellung). Dann kommt eine `fehler`-Zeile mit der Meldung des Servers; bei Gemini sind bis zu 3600 Bilder pro Anfrage möglich.
+- Eine nicht lesbare Datei lässt die ganze Anfrage scheitern; die Meldung nennt die Datei.
 
 ## Ausgabe
 

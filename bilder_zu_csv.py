@@ -104,12 +104,27 @@ def fehler_zeile(name: str, modell: str, meldung: str) -> dict:
             "dauer_s": "", "prompt_tokens": "", "completion_tokens": ""}
 
 
-def verarbeite_bild(client: OpenAI, modell: str, prompt: str, pfad: Path, name: str,
+def auftrag_name(bilder: list) -> str:
+    """Eintrag für die Spalte datei: ein Dateiname, oder bei mehreren Bildern alle mit ' | ' getrennt."""
+    return " | ".join(name for _, name in bilder)
+
+
+def verarbeite_bild(client: OpenAI, modell: str, prompt: str, bilder: list,
                     max_tokens: int, versuche: int, max_kante: int, temperature) -> dict:
-    try:
-        data_url = bild_als_data_url(pfad, max_kante)
-    except Exception as e:  # defekte Datei, unbekanntes Format ...
-        return fehler_zeile(name, modell, f"Bild nicht lesbar: {type(e).__name__}: {e}")
+    """Ein Auftrag = eine Anfrage. `bilder` ist eine Liste von (Pfad, Name); normalerweise
+    ein Bild, mit --zusammen alle Bilder des Ordners auf einmal."""
+    name = auftrag_name(bilder)
+    inhalt = []
+    for i, (pfad, bild_name) in enumerate(bilder, 1):
+        try:
+            data_url = bild_als_data_url(pfad, max_kante)
+        except Exception as e:  # defekte Datei, unbekanntes Format ...
+            return fehler_zeile(name, modell, f"Bild nicht lesbar: {bild_name}: {type(e).__name__}: {e}")
+        if len(bilder) > 1:
+            # Bilder beschriften, damit das Modell sie in der Antwort benennen kann
+            inhalt.append({"type": "text", "text": f"Bild {i}: {bild_name}"})
+        inhalt.append({"type": "image_url", "image_url": {"url": data_url}})
+    inhalt.append({"type": "text", "text": prompt})
 
     letzter_fehler = None
     for versuch in range(1, versuche + 1):
@@ -117,13 +132,7 @@ def verarbeite_bild(client: OpenAI, modell: str, prompt: str, pfad: Path, name: 
         try:
             resp = client.chat.completions.create(
                 model=modell,
-                messages=[{
-                    "role": "user",
-                    "content": [
-                        {"type": "image_url", "image_url": {"url": data_url}},
-                        {"type": "text", "text": prompt},
-                    ],
-                }],
+                messages=[{"role": "user", "content": inhalt}],
                 max_tokens=max_tokens,
                 **({"temperature": temperature} if temperature is not None else {}),
             )
@@ -195,6 +204,8 @@ def main():
     ap.add_argument("--workers", type=int, default=2, help="parallele Anfragen")
     ap.add_argument("--retries", type=int, default=3, help="Versuche pro Bild bei Netzwerk-/Serverfehlern")
     ap.add_argument("--recursive", action="store_true", help="auch Unterordner durchsuchen")
+    ap.add_argument("--zusammen", action="store_true",
+                    help="alle Bilder in EINER Anfrage schicken (z.B. zum Vergleichen); eine CSV-Zeile")
     ap.add_argument("--semikolon", action="store_true",
                     help="Semikolon statt Komma als Trennzeichen (für Excel mit deutschen Einstellungen)")
     args = ap.parse_args()
@@ -218,10 +229,21 @@ def main():
     bilder = sorted(p for p in args.ordner.glob(muster) if p.is_file() and p.suffix.lower() in BILD_ENDUNGEN)
     # Pfad relativ zum Bildordner, z.B. "a.jpg" oder mit --recursive "unterordner/a.jpg"
     namen = {p: p.relative_to(args.ordner).as_posix() for p in bilder}
+    # Ein Auftrag = eine Anfrage = eine CSV-Zeile: pro Bild eines, mit --zusammen ein einziger
+    if args.zusammen:
+        auftraege = [[(p, namen[p]) for p in bilder]] if bilder else []
+    else:
+        auftraege = [[(p, namen[p])] for p in bilder]
     trennzeichen = csv_trennzeichen(args.csv, ";" if args.semikolon else ",")
     erledigt = bereits_erledigt(args.csv, trennzeichen)
-    offen = [p for p in bilder if namen[p] not in erledigt]
-    print(f"{len(bilder)} Bilder gefunden, {len(erledigt)} bereits erledigt, {len(offen)} zu verarbeiten.")
+    offen = [a for a in auftraege if auftrag_name(a) not in erledigt]
+    if not bilder:
+        print("0 Bilder gefunden.")
+    elif args.zusammen:
+        print(f"{len(bilder)} Bilder gefunden, gehen zusammen in eine Anfrage"
+              + (" (bereits erledigt)." if not offen else "."))
+    else:
+        print(f"{len(bilder)} Bilder gefunden, {len(erledigt)} bereits erledigt, {len(offen)} zu verarbeiten.")
     if not offen:
         return
 
@@ -233,15 +255,16 @@ def main():
         if neu:
             writer.writeheader()
         pool = ThreadPoolExecutor(max_workers=args.workers)
-        futures = [pool.submit(verarbeite_bild, client, args.model, prompt, p, namen[p],
+        futures = [pool.submit(verarbeite_bild, client, args.model, prompt, a,
                                args.max_tokens, max(1, args.retries), args.max_kante,
-                               anbieter["temperature"]) for p in offen]
+                               anbieter["temperature"]) for a in offen]
         try:
             for i, fut in enumerate(as_completed(futures), 1):
                 zeile = fut.result()
                 writer.writerow(zeile)
                 f.flush()  # sofort schreiben -> bei Abbruch geht nichts verloren
-                print(f"[{i}/{len(offen)}] {zeile['datei']}: {zeile['status']}")
+                kurz = zeile["datei"] if not args.zusammen else f"{len(bilder)} Bilder zusammen"
+                print(f"[{i}/{len(offen)}] {kurz}: {zeile['status']}")
         except Abbruch as e:
             pool.shutdown(wait=False, cancel_futures=True)
             f.flush()

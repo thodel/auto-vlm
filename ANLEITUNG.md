@@ -73,6 +73,18 @@ Der erste Wert nach `bilder_zu_csv.py` ist der Bildordner, der zweite die CSV-Da
 - Du kannst den Ordner auch ins Terminal-Fenster ziehen, dann wird der Pfad automatisch eingefügt.
 - **Unterordner mitnehmen:** Normalerweise werden nur die Bilder direkt im Ordner verarbeitet. Mit `--recursive` kommen auch die Bilder in Unterordnern dazu. In der Spalte `datei` steht dann der Pfad mit Unterordner, z.B. `band1/seite_001.jpg`.
 
+### Bilder vergleichen
+
+Normalerweise bekommt das Modell jedes Bild einzeln. Mit `--zusammen` sieht es **alle Bilder des Ordners auf einmal** und kann sie vergleichen:
+
+```
+python bilder_zu_csv.py vlm-test vergleich.csv --zusammen
+```
+
+Der Prompt sollte dann zum Vergleich passen, z.B.: „Vergleiche die Bilder. Was haben sie gemeinsam, worin unterscheiden sie sich? Nenne die Bilder bei ihrem Namen.“ Das Modell kennt die Dateinamen (jedes Bild ist als `Bild 1: name.jpg` usw. beschriftet). Das Ergebnis ist eine einzige Zeile in der CSV.
+
+Das klappt gut mit wenigen Bildern (etwa 2 bis 20). Bei mehr Bildern wird die Anfrage sehr gross; dann `--max-kante 1024` dazugeben oder weniger Bilder in den Ordner legen.
+
 Das Skript zeigt für jedes Bild an, ob es geklappt hat. Wird es unterbrochen, starte es einfach mit demselben Befehl neu. Bereits fertige Bilder werden übersprungen.
 
 ## 5. Ergebnis ansehen
