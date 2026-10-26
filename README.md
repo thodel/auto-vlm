@@ -44,7 +44,7 @@ Standardmodell ist `gemini-3.8-flash`. Mit `--model` wählst du ein anderes.
 | `--base-url`, `--api-key`, `--model` | überschreiben die Voreinstellungen des Anbieters |
 | `--prompt-file` | Prompt-Datei (Standard: `prompt.txt`) |
 | `--max-tokens` | Obergrenze für die Antwortlänge (Standard 4096) |
-| `--max-kante` | Bilder mit längerer Kante über diesem Wert (Pixel) werden vor dem Senden verkleinert (Standard 2048, `0` = nie) |
+| `--max-kante` | Bilder mit längerer Kante über diesem Wert (Pixel) werden vor dem Senden verkleinert (Standard 1024, `0` = nie; für feine Handschrift z.B. `2048`) |
 | `--timeout` | Sekunden pro Anfrage (Standard 300; mit `--zusammen` 120 + 30 pro Bild) |
 | `--workers` | Anzahl paralleler Anfragen (Standard 2) |
 | `--retries` | Versuche pro Bild (Standard 3) |
@@ -60,10 +60,10 @@ Mit `--zusammen` gehen alle Bilder des Ordners in **einer** Anfrage an das Model
 python3 bilder_zu_csv.py ./bilder vergleich.csv --zusammen
 ```
 
-Der Server muss erst alle Bilder einlesen, bevor er zu antworten beginnt; bei 20 Bildern à 2048 px sind das rund 50 000 Eingabe-Tokens, was auch auf einer guten GPU einige Minuten dauern kann. Das Skript meldet die Vorbereitung jedes Bildes, das Absenden der Anfrage und alle 30 s ein Lebenszeichen. Dauert es zu lang: `--max-kante 1024` viertelt die Tokenzahl pro Bild.
+Der Server muss erst alle Bilder einlesen, bevor er zu antworten beginnt; bei 20 Bildern à 1024 px sind das rund 13 000 Eingabe-Tokens. Das Skript meldet die Vorbereitung jedes Bildes, das Absenden der Anfrage und alle 30 s ein Lebenszeichen. Dauert es zu lang: `--max-kante 768` halbiert die Tokenzahl pro Bild noch einmal.
 
 Grenzen:
-- Alle Bilder zusammen müssen ins Kontextfenster und ins Anfrage-Limit passen. Bei vielen Bildern `--max-kante 1024` setzen, das verkleinert die Anfrage deutlich.
+- Alle Bilder zusammen müssen ins Kontextfenster und ins Anfrage-Limit passen. Bei sehr vielen Bildern `--max-kante 768` setzen, das verkleinert die Anfrage weiter.
 - Manche GPUStack-Modelle erlauben nur eine begrenzte Zahl Bilder pro Anfrage (Server-Einstellung). Dann kommt eine `fehler`-Zeile mit der Meldung des Servers; bei Gemini sind bis zu 3600 Bilder pro Anfrage möglich.
 - Eine nicht lesbare Datei lässt die ganze Anfrage scheitern; die Meldung nennt die Datei.
 

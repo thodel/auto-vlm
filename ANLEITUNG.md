@@ -83,7 +83,7 @@ python bilder_zu_csv.py vlm-test vergleich.csv --zusammen
 
 Der Prompt sollte dann zum Vergleich passen, z.B.: „Vergleiche die Bilder. Was haben sie gemeinsam, worin unterscheiden sie sich? Nenne die Bilder bei ihrem Namen.“ Das Modell kennt die Dateinamen (jedes Bild ist als `Bild 1: name.jpg` usw. beschriftet). Das Ergebnis ist eine einzige Zeile in der CSV.
 
-Das klappt gut mit wenigen Bildern (etwa 2 bis 20). **Geduld:** Der Server muss erst alle Bilder einlesen, bevor er antwortet; das kann mehrere Minuten dauern. Das Skript zeigt, was es gerade tut („vorbereitet 3/12“, „Anfrage gesendet“, „läuft seit 90 s“). Dauert es zu lang oder kommt eine Zeitüberschreitung, hilft `--max-kante 1024` (kleinere Bilder, etwa viermal schneller) oder weniger Bilder im Ordner.
+Das klappt gut mit wenigen Bildern (etwa 2 bis 20). **Geduld:** Der Server muss erst alle Bilder einlesen, bevor er antwortet; das kann mehrere Minuten dauern. Das Skript zeigt, was es gerade tut („vorbereitet 3/12“, „Anfrage gesendet“, „läuft seit 90 s“). Dauert es zu lang oder kommt eine Zeitüberschreitung, hilft `--max-kante 768` (kleinere Bilder, etwa halb so viel Rechenaufwand) oder weniger Bilder im Ordner.
 
 Das Skript zeigt für jedes Bild an, ob es geklappt hat. Wird es unterbrochen, starte es einfach mit demselben Befehl neu. Bereits fertige Bilder werden übersprungen.
 
@@ -117,7 +117,7 @@ python bilder_zu_csv.py bilder ergebnisse.csv --semikolon
 | `Abbruch: Modell … nicht gefunden` | Modellname oder Server-Adresse stimmt nicht. Bei der Kursleitung nachfragen. |
 | `Bildordner nicht gefunden` | Pfad prüfen, siehe „Anderen Ordner verwenden“. |
 | `0 Bilder gefunden` | Ordnername prüfen. Unterstützt werden jpg, png, webp, tif, bmp und gif. |
-| `Zeitüberschreitung nach … s` | Die Anfrage dauerte zu lang. Mit `--max-kante 1024` die Bilder verkleinern oder `--timeout 1200` setzen. |
+| `Zeitüberschreitung nach … s` | Die Anfrage dauerte zu lang. Mit `--max-kante 768` die Bilder verkleinern oder `--timeout 1200` setzen. |
 | Viele `fehler` mit „429“ oder „rate limit“ | Zu viele Anfragen auf einmal. Mit `--workers 1` starten. |
 | Alles in einer Spalte in Excel | Skript mit `--semikolon` starten oder über **Daten → Aus Text/CSV** importieren. |
 | Umlaute in Excel kaputt | In Excel über **Daten → Aus Text/CSV** importieren und UTF-8 wählen. |

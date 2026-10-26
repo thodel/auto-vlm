@@ -172,7 +172,7 @@ def verarbeite_bild(client: OpenAI, modell: str, prompt: str, bilder: list,
             if zusammen:
                 # Ein zweiter Versuch dauert genauso lang -> sofort melden
                 return fehler_zeile(name, modell, f"Zeitüberschreitung nach {client.timeout:.0f} s. "
-                                    "--timeout erhöhen oder --max-kante verkleinern (z.B. 1024).")
+                                    "--timeout erhöhen oder --max-kante verkleinern (z.B. 768).")
             letzter_fehler = e
         except openai.RateLimitError as e:  # 429: Server überlastet oder Kontingent erschöpft
             letzter_fehler = e
@@ -216,7 +216,7 @@ def main():
     ap.add_argument("--prompt-file", type=Path, default=STANDARD_PROMPT_DATEI,
                     help="Textdatei mit dem Prompt (Standard: prompt.txt neben dem Skript)")
     ap.add_argument("--max-tokens", type=int, default=4096, help="Obergrenze für die Antwortlänge")
-    ap.add_argument("--max-kante", type=int, default=2048,
+    ap.add_argument("--max-kante", type=int, default=1024,
                     help="Bilder mit längerer Kante (Pixel) werden vor dem Senden verkleinert; 0 = nie")
     ap.add_argument("--timeout", type=int,
                     help="Sekunden, die eine Anfrage dauern darf (Standard 300; mit --zusammen 120 + 30 pro Bild)")
