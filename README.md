@@ -22,7 +22,7 @@ Der Prompt steht in `prompt.txt` neben dem Skript. Diese Datei bearbeiten oder m
 
 ## Verwendung
 
-**GPUStack der Uni Bern** (Standard: `http://gpustack.unibe.ch/v1`, Modell `qwen3.8-27b`)
+**GPUStack der Uni Bern** (Standard: `https://gpustack.unibe.ch/v1`, Modell `qwen3.8-27b`)
 ```bash
 export GPUSTACK_API_KEY="gpustack_..."
 python3 bilder_zu_csv.py ./bilder ergebnisse.csv

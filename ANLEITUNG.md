@@ -51,7 +51,7 @@ Leg deine Bilder in einen Ordner, z.B. `bilder` im Projektordner. Dann im Termin
 python bilder_zu_csv.py bilder ergebnisse.csv --provider gemini
 ```
 
-**Mit GPUStack der Uni Bern** (Server `http://gpustack.unibe.ch/v1` und Modell `qwen3.8-27b` sind voreingestellt)
+**Mit GPUStack der Uni Bern** (Server `https://gpustack.unibe.ch/v1` und Modell `qwen3.8-27b` sind voreingestellt)
 ```
 python bilder_zu_csv.py bilder ergebnisse.csv
 ```

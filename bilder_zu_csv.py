@@ -49,7 +49,7 @@ STANDARD_PROMPT_DATEI = Path(__file__).resolve().parent / "prompt.txt"
 # Voreinstellungen je Anbieter; alles lässt sich per Kommandozeile überschreiben.
 ANBIETER = {
     "gpustack": {
-        "base_url": os.environ.get("GPUSTACK_BASE_URL", "http://gpustack.unibe.ch/v1"),
+        "base_url": os.environ.get("GPUSTACK_BASE_URL", "https://gpustack.unibe.ch/v1"),
         "key_env": "GPUSTACK_API_KEY",
         "model": "qwen3.8-27b",
         "temperature": 0,  # deterministisch
@@ -210,7 +210,7 @@ def main():
     ap.add_argument("ordner", type=Path, help="Ordner mit den Bildern")
     ap.add_argument("csv", type=Path, help="Ausgabe-CSV")
     ap.add_argument("--provider", choices=ANBIETER, default="gpustack", help="gpustack (Standard) oder gemini")
-    ap.add_argument("--base-url", help="API-Adresse; GPUStack z.B. http://server/v1 (ältere Versionen: /v1-openai)")
+    ap.add_argument("--base-url", help="API-Adresse; GPUStack z.B. https://server/v1 (ältere Versionen: /v1-openai)")
     ap.add_argument("--api-key", help="API-Key (Standard: GPUSTACK_API_KEY bzw. GEMINI_API_KEY)")
     ap.add_argument("--model", help="Modellname (Standard: qwen3.8-27b bzw. gemini-3.8-flash)")
     ap.add_argument("--prompt-file", type=Path, default=STANDARD_PROMPT_DATEI,
